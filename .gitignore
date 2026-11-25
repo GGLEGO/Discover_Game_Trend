@@ -1,0 +1,12 @@
+# 비밀 값
+.env
+.env.*
+
+# 외부 저장소 사본 (https://github.com/epoko77-ai/im-not-ai)
+im-not-ai/
+
+# 임시 파일
+node_modules/
+*.tmp
+*.log
+.DS_Store

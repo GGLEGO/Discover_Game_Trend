@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discover Game Trends | 스팀 게임 리뷰</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 헤더: 로고(왼쪽 상단) + 검색창(로고 오른쪽) -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo" aria-label="Discover Game Trends 홈">
+        <img src="../logo.png" alt="Discover Game Trends 로고">
+      </a>
+
+      <form class="search" role="search" onsubmit="return false;">
+        <input type="search" id="search-input" placeholder="게임 이름을 검색하세요" aria-label="게임 검색" autocomplete="off">
+        <button type="submit" aria-label="검색">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="intro">
+      <h1>스팀 게임 리뷰</h1>
+      <p>게임을 고르면 리뷰 글과 댓글을 볼 수 있습니다.</p>
+    </section>
+
+    <!-- 게임 블럭 목록: test.json 의 게임명으로 만들어진다 -->
+    <section class="game-grid" id="game-grid"></section>
+
+    <p class="notice" id="notice" hidden></p>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 Discover Game Trends</p>
+  </footer>
+
+  <script>
+    const grid = document.getElementById('game-grid');
+    const notice = document.getElementById('notice');
+    const input = document.getElementById('search-input');
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.hidden = !message;
+    }
+
+    // 검색어에 맞는 블럭만 보여 준다
+    function applyFilter() {
+      const blocks = grid.querySelectorAll('.game-block');
+      if (blocks.length === 0) return;
+
+      const keyword = input.value.trim().toLowerCase();
+      let visible = 0;
+      blocks.forEach((block) => {
+        const match = block.textContent.toLowerCase().includes(keyword);
+        block.hidden = !match;
+        if (match) visible++;
+      });
+      showNotice(visible === 0 ? '검색 결과가 없습니다.' : '');
+    }
+
+    // test.json 의 게임마다 블럭을 하나씩 만든다
+    function renderGames(games) {
+      grid.textContent = '';
+
+      if (games.length === 0) {
+        showNotice('아직 등록된 게임이 없습니다. test.json 에 게임명을 추가해 주세요.');
+        return;
+      }
+
+      games.forEach((game) => {
+        const block = document.createElement('a');
+        block.className = 'game-block';
+        block.href = 'post.html?game=' + encodeURIComponent(game.name);
+        block.textContent = game.name;
+        grid.appendChild(block);
+      });
+
+      applyFilter();
+    }
+
+    input.addEventListener('input', applyFilter);
+
+    // 글 페이지의 검색창에서 넘어온 검색어
+    const initial = new URLSearchParams(location.search).get('q');
+    if (initial) input.value = initial;
+
+    fetch('/api/games')
+      .then((res) => res.json().then((data) => (res.ok ? data : Promise.reject(data))))
+      .then(renderGames)
+      .catch((err) => {
+        showNotice((err && err.error) || '게임 목록을 불러오지 못했습니다. node server.js 로 서버를 실행했는지 확인해 주세요.');
+      });
+  </script>
+</body>
+</html>

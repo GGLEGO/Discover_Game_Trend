@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discover Game Trends | 스팀 게임 리뷰</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 헤더: 로고(왼쪽 상단) + 검색창(로고 오른쪽) -->
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo" aria-label="Discover Game Trends 홈">
+        <img src="../logo.png" alt="Discover Game Trends 로고">
+      </a>
+
+      <!-- 여기서 검색하면 홈으로 가서 결과를 보여 준다 -->
+      <form class="search" role="search" action="index.html" method="get">
+        <input type="search" name="q" placeholder="게임 이름을 검색하세요" aria-label="게임 검색" autocomplete="off">
+        <button type="submit" aria-label="검색">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </header>
+
+  <main class="container narrow">
+    <a class="back-link" href="index.html">← 게임 목록으로</a>
+
+    <p class="notice" id="notice" hidden></p>
+
+    <!-- 글 -->
+    <article class="article" id="article" hidden>
+      <span class="game-name" id="game-name"></span>
+      <h1 id="post-title"></h1>
+      <div class="article-body" id="post-body"></div>
+    </article>
+
+    <!-- 댓글 -->
+    <section class="comments" id="comments" hidden>
+      <h2>댓글 <span id="comment-count">0</span></h2>
+
+      <ul class="comment-list" id="comment-list"></ul>
+      <p class="comment-empty" id="comment-empty" hidden>아직 댓글이 없습니다. 첫 댓글을 남겨 보세요.</p>
+
+      <form class="comment-form" id="comment-form">
+        <input type="text" id="comment-author" maxlength="20" placeholder="닉네임 (비우면 Guest)" aria-label="닉네임" autocomplete="off">
+        <textarea id="comment-text" maxlength="500" rows="3" placeholder="댓글을 입력하세요" aria-label="댓글 내용" required></textarea>
+        <div class="comment-form-foot">
+          <span class="form-error" id="form-error"></span>
+          <button type="submit" id="comment-submit">댓글 등록</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 Discover Game Trends</p>
+  </footer>
+
+  <script>
+    const gameName = new URLSearchParams(location.search).get('game') || '';
+
+    const notice = document.getElementById('notice');
+    const article = document.getElementById('article');
+    const commentsSection = document.getElementById('comments');
+    const commentList = document.getElementById('comment-list');
+    const commentEmpty = document.getElementById('comment-empty');
+    const commentCount = document.getElementById('comment-count');
+    const form = document.getElementById('comment-form');
+    const formError = document.getElementById('form-error');
+    const submitButton = document.getElementById('comment-submit');
+
+    function showNotice(message) {
+      notice.textContent = message;
+      notice.hidden = !message;
+    }
+
+    // ===== 글 본문(마크다운)을 화면용 HTML로 바꾼다 =====
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    // 먼저 전부 이스케이프한 뒤 굵은 글씨만 되살린다
+    function inline(text) {
+      return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    }
+
+    function renderMarkdown(markdown) {
+      const source = markdown
+        .replace(/\r\n/g, '\n')
+        .replace(/^---\n[\s\S]*?\n---\n/, '')   // 머리말 제거
+        .replace(/<!--[\s\S]*?-->/g, '');        // 주석 제거
+
+      let html = '';
+      let list = null;
+      let paragraph = [];
+
+      const flushParagraph = () => {
+        if (paragraph.length) {
+          html += '<p>' + paragraph.map(inline).join('<br>') + '</p>';
+          paragraph = [];
+        }
+      };
+      const closeList = () => {
+        if (list) {
+          html += '</' + list + '>';
+          list = null;
+        }
+      };
+      const openList = (type) => {
+        flushParagraph();
+        if (list !== type) {
+          closeList();
+          html += '<' + type + '>';
+          list = type;
+        }
+      };
+
+      source.split('\n').forEach((line) => {
+        const text = line.trim();
+        let m;
+
+        if (!text) {
+          flushParagraph();
+          closeList();
+        } else if ((m = text.match(/^(#{1,4})\s+(.*)$/))) {
+          flushParagraph();
+          closeList();
+          const level = Math.max(2, m[1].length);   // 페이지의 h1 은 글 제목이 쓴다
+          html += '<h' + level + '>' + inline(m[2]) + '</h' + level + '>';
+        } else if ((m = text.match(/^[-*]\s+(.*)$/))) {
+          openList('ul');
+          html += '<li>' + inline(m[1]) + '</li>';
+        } else if ((m = text.match(/^\d+\.\s+(.*)$/))) {
+          openList('ol');
+          html += '<li>' + inline(m[1]) + '</li>';
+        } else if ((m = text.match(/^>\s?(.*)$/))) {
+          flushParagraph();
+          closeList();
+          html += '<blockquote>' + inline(m[1]) + '</blockquote>';
+        } else {
+          closeList();
+          paragraph.push(text);
+        }
+      });
+
+      flushParagraph();
+      closeList();
+      return html;
+    }
+
+    // ===== 댓글 =====
+
+    function formatDate(value) {
+      const date = new Date(value);
+      if (!value || isNaN(date)) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return date.getFullYear() + '.' + pad(date.getMonth() + 1) + '.' + pad(date.getDate());
+    }
+
+    function addComment(comment) {
+      const item = document.createElement('li');
+      item.className = 'comment';
+
+      const head = document.createElement('div');
+      head.className = 'comment-head';
+
+      const author = document.createElement('strong');
+      author.textContent = comment.author || 'Guest';
+
+      const date = document.createElement('span');
+      date.textContent = formatDate(comment.date);
+
+      const text = document.createElement('p');
+      text.textContent = comment.text || '';
+
+      head.append(author, date);
+      item.append(head, text);
+      commentList.appendChild(item);
+    }
+
+    function updateCount() {
+      const count = commentList.children.length;
+      commentCount.textContent = count;
+      commentEmpty.hidden = count > 0;
+    }
+
+    // ===== 페이지 만들기 =====
+
+    function renderPage(game) {
+      document.title = (game.title || game.name) + ' | Discover Game Trends';
+      document.getElementById('game-name').textContent = game.name;
+
+      if (game.content.trim()) {
+        document.getElementById('post-title').textContent = game.title || game.name + ' 리뷰';
+        document.getElementById('post-body').innerHTML = renderMarkdown(game.content);
+      } else {
+        document.getElementById('post-title').textContent = game.name;
+        document.getElementById('post-body').innerHTML =
+          '<p class="pending">아직 리뷰 글이 작성되지 않았습니다.</p>';
+      }
+
+      game.comments.forEach(addComment);
+      updateCount();
+
+      article.hidden = false;
+      commentsSection.hidden = false;
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      formError.textContent = '';
+      submitButton.disabled = true;
+
+      fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game: gameName,
+          author: document.getElementById('comment-author').value,
+          text: document.getElementById('comment-text').value,
+        }),
+      })
+        .then((res) => res.json().then((data) => (res.ok ? data : Promise.reject(data))))
+        .then((comment) => {
+          addComment(comment);
+          updateCount();
+          document.getElementById('comment-text').value = '';
+        })
+        .catch((err) => {
+          formError.textContent = (err && err.error) || '댓글을 등록하지 못했습니다.';
+        })
+        .finally(() => {
+          submitButton.disabled = false;
+        });
+    });
+
+    if (!gameName) {
+      showNotice('게임이 선택되지 않았습니다. 목록에서 게임을 골라 주세요.');
+    } else {
+      fetch('/api/game?name=' + encodeURIComponent(gameName))
+        .then((res) => res.json().then((data) => (res.ok ? data : Promise.reject(data))))
+        .then(renderPage)
+        .catch((err) => {
+          showNotice((err && err.error) || '글을 불러오지 못했습니다. node server.js 로 서버를 실행했는지 확인해 주세요.');
+        });
+    }
+  </script>
+</body>
+</html>
