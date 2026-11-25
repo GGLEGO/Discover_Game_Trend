@@ -1,0 +1,2 @@
+# Discover_Game_Trend
+blog_posting_steam_game
